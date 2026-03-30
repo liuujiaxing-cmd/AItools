@@ -1,0 +1,16 @@
+{
+  "name": "openclaw-toolset",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev:gateway": "npm --workspace services/gateway run dev",
+    "dev:runtime": "npm --workspace services/runtime run dev",
+    "dev:registry": "npm --workspace services/registry run dev",
+    "dev:portal": "npm --workspace services/portal run dev",
+    "build": "npm --workspaces --if-present run build",
+    "test": "npm --workspaces --if-present run test"
+  }
+}

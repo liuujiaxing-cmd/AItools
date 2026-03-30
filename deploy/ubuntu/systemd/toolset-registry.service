@@ -1,0 +1,16 @@
+[Unit]
+Description=Toolset Registry
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/openclaw-toolset
+EnvironmentFile=/opt/openclaw-toolset/.env
+ExecStart=/usr/bin/npm --workspace services/registry run dev
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+

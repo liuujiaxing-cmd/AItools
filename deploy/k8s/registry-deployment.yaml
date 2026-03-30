@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: toolset-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: toolset-registry
+  template:
+    metadata:
+      labels:
+        app: toolset-registry
+    spec:
+      containers:
+        - name: registry
+          image: toolset-registry:latest
+          ports:
+            - containerPort: 8082
+          env:
+            - name: PORT
+              value: "8082"
+            - name: DATABASE_URL
+              value: postgres://postgres:postgres@postgres:5432/toolset

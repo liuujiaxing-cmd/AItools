@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: toolset-gateway
+spec:
+  selector:
+    app: toolset-gateway
+  ports:
+    - port: 80
+      targetPort: 8080
+

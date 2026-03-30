@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: toolset-runtime
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: toolset-runtime
+  template:
+    metadata:
+      labels:
+        app: toolset-runtime
+    spec:
+      containers:
+        - name: runtime
+          image: toolset-runtime:latest
+          ports:
+            - containerPort: 8081
+          env:
+            - name: PORT
+              value: "8081"
+            - name: TOOLS_DIR
+              value: tools
+            - name: REDIS_URL
+              value: redis://redis:6379/0
