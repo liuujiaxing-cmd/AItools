@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { KeyRound, Play, RotateCcw } from "lucide-react";
+import { Clipboard, KeyRound, Play, Sparkles, RotateCcw } from "lucide-react";
 
 import Badge from "@/components/Badge";
 import EmptyState from "@/components/EmptyState";
@@ -10,6 +10,8 @@ import { getDemoToken, getTool, getTools, invokeTool, ToolRecord } from "@/api/t
 import { usePortalStore } from "@/store/portalStore";
 import { getErrorMessage } from "@/utils/errors";
 import { safeJsonStringify } from "@/utils/json";
+import { copyToClipboard } from "@/utils/clipboard";
+import { inferExampleFromJsonSchema } from "@/utils/jsonSchemaExample";
 
 function safeParseJson(input: string) {
   try {
@@ -40,6 +42,7 @@ export default function Playground() {
   const [contextJson, setContextJson] = useState("{}\n");
   const [response, setResponse] = useState<unknown>(null);
   const [invokeError, setInvokeError] = useState<string>("");
+  const [notice, setNotice] = useState<string>("");
 
   useEffect(() => {
     let alive = true;
@@ -117,6 +120,80 @@ export default function Playground() {
     }
   }
 
+  function buildInvokePayload(exampleInput: unknown, exampleContext: unknown) {
+    return { input: exampleInput ?? {}, context: exampleContext ?? {}, options: {} };
+  }
+
+  async function fillExample() {
+    const ex = inferExampleFromJsonSchema(toolSchema);
+    if (typeof ex === "object" && ex && !Array.isArray(ex)) syncFormToJson(ex as Record<string, unknown>);
+    else {
+      const obj = typeof ex === "object" && ex && !Array.isArray(ex) ? (ex as Record<string, unknown>) : {};
+      syncFormToJson(obj);
+    }
+    setNotice("已填充示例参数");
+    window.setTimeout(() => setNotice(""), 1500);
+  }
+
+  async function invokeExample() {
+    setInvokeError("");
+    setResponse(null);
+    if (!selectedTool) {
+      setInvokeError("请选择一个工具");
+      return;
+    }
+    const ex = inferExampleFromJsonSchema(toolSchema);
+    const payload = buildInvokePayload(ex ?? {}, contextPayload.ok ? contextPayload.value : {});
+    setLoading(true);
+    try {
+      const r = await invokeTool(gatewayBaseUrl, selectedTool, payload, bearerToken);
+      setResponse(r);
+    } catch (e: unknown) {
+      setInvokeError(getErrorMessage(e));
+      if (e && typeof e === "object" && "data" in e) setResponse((e as { data: unknown }).data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function buildCurl(toolName: string, token: string | null, payload: unknown) {
+    const auth = token ? `  -H 'authorization: Bearer ${token}' \\\n+` : "";
+    return (
+      `curl -sS -X POST ${gatewayBaseUrl}/v1/tools/${encodeURIComponent(toolName)}:invoke \\\n+  -H 'content-type: application/json' \\\n+${auth}  -d '${safeJsonStringify(payload)}'\n`
+    );
+  }
+
+  async function copyCurl(useDemoToken: boolean) {
+    setInvokeError("");
+    if (!selectedTool) {
+      setInvokeError("请选择一个工具");
+      return;
+    }
+    const ex = inferExampleFromJsonSchema(toolSchema);
+    const payload = buildInvokePayload(ex ?? {}, contextPayload.ok ? contextPayload.value : {});
+    let token: string | null = bearerToken || null;
+
+    if (useDemoToken) {
+      try {
+        const r = await getDemoToken(gatewayBaseUrl);
+        token = r.access_token;
+        setBearerToken(r.access_token);
+      } catch (e: unknown) {
+        setInvokeError(getErrorMessage(e));
+        return;
+      }
+    }
+
+    const escapeForSingleQuotes = (s: string) => s.replace(/'/g, `'\\''`);
+    const auth = token ? `  -H 'authorization: Bearer ${token}' \\\n+` : "";
+    const body = escapeForSingleQuotes(JSON.stringify(payload));
+    const cmd = `curl -sS -X POST ${gatewayBaseUrl}/v1/tools/${encodeURIComponent(selectedTool)}:invoke \\\n+  -H 'content-type: application/json' \\\n+${auth}  -d '${body}'\n`;
+
+    await copyToClipboard(cmd);
+    setNotice("已复制 cURL");
+    window.setTimeout(() => setNotice(""), 1500);
+  }
+
   async function onGetDemoToken() {
     setInvokeError("");
     setLoading(true);
@@ -190,9 +267,37 @@ export default function Playground() {
             <Play className="h-4 w-4" />
             调用
           </button>
+          <button
+            type="button"
+            disabled={loading || !selectedTool}
+            onClick={invokeExample}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Sparkles className="h-4 w-4" />
+            一键示例调用
+          </button>
+          <button
+            type="button"
+            disabled={loading || !selectedTool}
+            onClick={() => copyCurl(false)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Clipboard className="h-4 w-4" />
+            复制 cURL
+          </button>
+          <button
+            type="button"
+            disabled={loading || !selectedTool}
+            onClick={() => copyCurl(true)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Clipboard className="h-4 w-4" />
+            复制 cURL(含Token)
+          </button>
         </div>
       </div>
 
+      {notice ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">{notice}</div> : null}
       {invokeError ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{invokeError}</div> : null}
 
       <div className="rounded-xl border border-zinc-200 bg-white p-4">
@@ -219,6 +324,16 @@ export default function Playground() {
             }
           >
             JSON
+          </button>
+
+          <button
+            type="button"
+            disabled={!selectedTool}
+            onClick={fillExample}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Sparkles className="h-4 w-4" />
+            填充示例
           </button>
 
           <button

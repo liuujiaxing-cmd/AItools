@@ -15,6 +15,30 @@ function normalizeBaseUrl(v: string) {
   return s.endsWith("/") ? s.slice(0, -1) : s;
 }
 
+function upgradeToHttpsIfNeeded(baseUrl: string) {
+  if (typeof window === "undefined") return baseUrl;
+  if (window.location.protocol !== "https:") return baseUrl;
+  if (!baseUrl.startsWith("http://")) return baseUrl;
+  if (baseUrl.startsWith("http://localhost") || baseUrl.startsWith("http://127.0.0.1")) return baseUrl;
+  return `https://${baseUrl.slice("http://".length)}`;
+}
+
+function inferDefaultsFromLocation() {
+  if (typeof window === "undefined") return {} as Partial<PortalConfig>;
+  const host = window.location.hostname;
+  const proto = window.location.protocol;
+  if (host === "localhost" || host === "127.0.0.1") return {} as Partial<PortalConfig>;
+  if (host.startsWith("toolset.")) {
+    const rest = host.slice("toolset.".length);
+    return {
+      gatewayBaseUrl: `${proto}//toolset-api.${rest}`,
+      runtimeBaseUrl: "",
+      registryBaseUrl: ""
+    } as Partial<PortalConfig>;
+  }
+  return {} as Partial<PortalConfig>;
+}
+
 function readConfigFromStorage(): Partial<PortalConfig> {
   if (typeof window === "undefined") return {};
   try {
@@ -36,16 +60,19 @@ function writeConfigToStorage(cfg: PortalConfig) {
   }
 }
 
+const inferred = inferDefaultsFromLocation();
 const defaults: PortalConfig = {
-  gatewayBaseUrl: normalizeBaseUrl(import.meta.env.VITE_GATEWAY_BASE_URL ?? "http://localhost:8080"),
-  runtimeBaseUrl: normalizeBaseUrl(import.meta.env.VITE_RUNTIME_BASE_URL ?? "http://localhost:8081"),
-  registryBaseUrl: normalizeBaseUrl(import.meta.env.VITE_REGISTRY_BASE_URL ?? "http://localhost:8082"),
+  gatewayBaseUrl: normalizeBaseUrl(
+    upgradeToHttpsIfNeeded(String(import.meta.env.VITE_GATEWAY_BASE_URL ?? inferred.gatewayBaseUrl ?? "http://localhost:8080"))
+  ),
+  runtimeBaseUrl: normalizeBaseUrl(String(import.meta.env.VITE_RUNTIME_BASE_URL ?? inferred.runtimeBaseUrl ?? "http://localhost:8081")),
+  registryBaseUrl: normalizeBaseUrl(String(import.meta.env.VITE_REGISTRY_BASE_URL ?? inferred.registryBaseUrl ?? "http://localhost:8082")),
   bearerToken: ""
 };
 
 const stored = readConfigFromStorage();
 const initial: PortalConfig = {
-  gatewayBaseUrl: normalizeBaseUrl(stored.gatewayBaseUrl ?? defaults.gatewayBaseUrl),
+  gatewayBaseUrl: normalizeBaseUrl(upgradeToHttpsIfNeeded(String(stored.gatewayBaseUrl ?? defaults.gatewayBaseUrl))),
   runtimeBaseUrl: normalizeBaseUrl(stored.runtimeBaseUrl ?? defaults.runtimeBaseUrl),
   registryBaseUrl: normalizeBaseUrl(stored.registryBaseUrl ?? defaults.registryBaseUrl),
   bearerToken: String(stored.bearerToken ?? defaults.bearerToken)
@@ -87,4 +114,3 @@ export const usePortalStore = create<PortalStore>((set, get) => ({
     set({ bearerToken: "" });
   }
 }));
-

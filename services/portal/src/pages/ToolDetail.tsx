@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, FileText, Play, Wrench } from "lucide-react";
+import { ArrowLeft, Clipboard, FileText, Play, Sparkles, Wrench } from "lucide-react";
 
 import Badge from "@/components/Badge";
 import EmptyState from "@/components/EmptyState";
 import JsonTextarea from "@/components/JsonTextarea";
-import { getTool, getToolDocs, ToolDetailResponse, ToolDocsResponse } from "@/api/toolset";
+import { getDemoToken, getTool, getToolDocs, invokeTool, ToolDetailResponse, ToolDocsResponse } from "@/api/toolset";
 import { usePortalStore } from "@/store/portalStore";
 import { getErrorMessage } from "@/utils/errors";
 import { safeJsonStringify } from "@/utils/json";
+import { copyToClipboard } from "@/utils/clipboard";
+import { inferExampleFromJsonSchema } from "@/utils/jsonSchemaExample";
 
 function statusTone(status: string): "neutral" | "green" | "red" | "yellow" | "blue" {
   if (status === "ready") return "green";
@@ -20,12 +22,16 @@ function statusTone(status: string): "neutral" | "green" | "red" | "yellow" | "b
 export default function ToolDetail() {
   const { toolName } = useParams();
   const [searchParams] = useSearchParams();
-  const { gatewayBaseUrl, bearerToken } = usePortalStore();
+  const { gatewayBaseUrl, bearerToken, setBearerToken } = usePortalStore();
 
   const [detail, setDetail] = useState<ToolDetailResponse | null>(null);
   const [docs, setDocs] = useState<ToolDocsResponse | null>(null);
   const [err, setErr] = useState<string>("");
   const [tab, setTab] = useState<"meta" | "schema" | "docs">("meta");
+  const [docsErr, setDocsErr] = useState<string>("");
+  const [invokeLoading, setInvokeLoading] = useState(false);
+  const [invokeResult, setInvokeResult] = useState<unknown>(null);
+  const [notice, setNotice] = useState<string>("");
 
   const name = String(toolName ?? "");
   const autoTab = searchParams.get("tab");
@@ -38,15 +44,13 @@ export default function ToolDetail() {
   useEffect(() => {
     let alive = true;
     setDetail(null);
-    setDocs(null);
     setErr("");
     if (!name) return;
 
-    Promise.all([getTool(gatewayBaseUrl, name, bearerToken), getToolDocs(gatewayBaseUrl, name, bearerToken)])
-      .then(([d, doc]) => {
+    getTool(gatewayBaseUrl, name, bearerToken)
+      .then((d) => {
         if (!alive) return;
         setDetail(d);
-        setDocs(doc);
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -58,10 +62,77 @@ export default function ToolDetail() {
     };
   }, [gatewayBaseUrl, bearerToken, name]);
 
+  useEffect(() => {
+    let alive = true;
+    setDocs(null);
+    setDocsErr("");
+    if (!name) return;
+    if (tab !== "docs") return;
+
+    getToolDocs(gatewayBaseUrl, name, bearerToken)
+      .then((doc) => {
+        if (!alive) return;
+        setDocs(doc);
+      })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        setDocsErr(getErrorMessage(e));
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [gatewayBaseUrl, bearerToken, name, tab]);
+
   const meta = detail?.tool.metadata;
   const status = detail?.tool.status;
   const schemaText = useMemo(() => safeJsonStringify({ input_schema: meta?.input_schema, output_schema: meta?.output_schema }), [meta]);
   const docsText = useMemo(() => safeJsonStringify(docs), [docs]);
+
+  function escapeForSingleQuotes(s: string) {
+    return s.replace(/'/g, `'\\''`);
+  }
+
+  function buildInvokePayload() {
+    const ex = inferExampleFromJsonSchema(meta?.input_schema);
+    return { input: ex ?? {}, context: {}, options: {} };
+  }
+
+  function buildCurl(token: string | null) {
+    const payload = buildInvokePayload();
+    const auth = token ? `  -H 'authorization: Bearer ${token}' \\\n+` : "";
+    const body = escapeForSingleQuotes(JSON.stringify(payload));
+    return (
+      `curl -sS -X POST ${gatewayBaseUrl}/v1/tools/${encodeURIComponent(name)}:invoke \\\n+  -H 'content-type: application/json' \\\n+${auth}  -d '${body}'\n`
+    );
+  }
+
+  async function copyCurl(useDemoToken: boolean) {
+    let token: string | null = bearerToken || null;
+    if (useDemoToken) {
+      const r = await getDemoToken(gatewayBaseUrl);
+      token = r.access_token;
+      setBearerToken(r.access_token);
+    }
+    await copyToClipboard(buildCurl(token));
+    setNotice("已复制 cURL");
+    window.setTimeout(() => setNotice(""), 1500);
+  }
+
+  async function invokeExample() {
+    setInvokeResult(null);
+    setInvokeLoading(true);
+    try {
+      const r = await invokeTool(gatewayBaseUrl, name, buildInvokePayload(), bearerToken);
+      setInvokeResult(r);
+      setNotice("调用完成");
+      window.setTimeout(() => setNotice(""), 1500);
+    } catch (e: unknown) {
+      setInvokeResult({ error: getErrorMessage(e) });
+    } finally {
+      setInvokeLoading(false);
+    }
+  }
 
   if (!name) return <EmptyState title="未指定工具" description="从工具列表进入该页面。" />;
   if (err) return <EmptyState title="无法加载工具详情" description={err} />;
@@ -89,6 +160,33 @@ export default function ToolDetail() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Badge tone={statusTone(status ?? "")}>{status ?? "—"}</Badge>
           <Badge>{meta.version}</Badge>
+          <button
+            type="button"
+            disabled={invokeLoading}
+            onClick={invokeExample}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Sparkles className="h-4 w-4" />
+            一键示例调用
+          </button>
+          <button
+            type="button"
+            disabled={invokeLoading}
+            onClick={() => copyCurl(false)}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Clipboard className="h-4 w-4" />
+            复制 cURL
+          </button>
+          <button
+            type="button"
+            disabled={invokeLoading}
+            onClick={() => copyCurl(true)}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            <Clipboard className="h-4 w-4" />
+            复制 cURL(含Token)
+          </button>
           <Link
             to={`/playground?tool=${encodeURIComponent(meta.name)}`}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-3 text-sm font-semibold text-white hover:bg-zinc-800"
@@ -107,6 +205,17 @@ export default function ToolDetail() {
           </a>
         </div>
       </div>
+
+      {notice ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">{notice}</div> : null}
+
+      {invokeResult ? (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-semibold">最近一次调用结果</div>
+          <div className="mt-3">
+            <JsonTextarea value={safeJsonStringify(invokeResult)} onChange={() => {}} rows={10} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -192,6 +301,7 @@ export default function ToolDetail() {
       {tab === "docs" ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <div className="text-sm font-semibold">request/response 示例（来自 Runtime docs）</div>
+          {docsErr ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{docsErr}</div> : null}
           <div className="mt-3">
             <JsonTextarea value={docsText} onChange={() => {}} rows={18} />
           </div>

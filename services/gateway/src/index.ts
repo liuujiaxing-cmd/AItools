@@ -36,6 +36,23 @@ const redis = new Redis(env.REDIS_URL);
 redis.on("error", () => {});
 const limiter = new TokenBucketLimiter(redis);
 
+type CacheEntry = { expiresAt: number; statusCode: number; body: unknown };
+const responseCache = new Map<string, CacheEntry>();
+
+function getCached(key: string) {
+  const hit = responseCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    responseCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function setCached(key: string, statusCode: number, body: unknown, ttlMs: number) {
+  responseCache.set(key, { expiresAt: Date.now() + ttlMs, statusCode, body });
+}
+
 const app = Fastify({
   logger: {
     level: "info",
@@ -248,23 +265,47 @@ app.post("/v1/apikeys", {
 
 app.get("/v1/tools", async (req: any) => {
   await authenticate(req);
+  const cacheKey = "runtime:/v1/tools";
+  const cached = getCached(cacheKey);
+  if (cached) return cached.body;
+
   const r = await request(`${env.RUNTIME_BASE_URL}/v1/tools`, { method: "GET" });
-  return await r.body.json();
+  const data = await r.body.json();
+  if (r.statusCode === 200) setCached(cacheKey, r.statusCode, data, 2000);
+  return data;
 });
 
 app.get("/v1/tools/:toolName", async (req: any, reply: any) => {
   await authenticate(req);
-  const r = await request(`${env.RUNTIME_BASE_URL}/v1/tools/${encodeURIComponent(req.params.toolName)}`, { method: "GET" });
+  const toolName = String(req.params.toolName);
+  const cacheKey = `runtime:/v1/tools/${toolName}`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    reply.code(cached.statusCode);
+    return cached.body;
+  }
+
+  const r = await request(`${env.RUNTIME_BASE_URL}/v1/tools/${encodeURIComponent(toolName)}`, { method: "GET" });
   const data = await r.body.json();
   reply.code(r.statusCode);
+  if (r.statusCode === 200) setCached(cacheKey, r.statusCode, data, 2000);
   return data;
 });
 
 app.get("/v1/tools/:toolName/docs", async (req: any, reply: any) => {
   await authenticate(req);
-  const r = await request(`${env.RUNTIME_BASE_URL}/v1/tools/${encodeURIComponent(req.params.toolName)}/docs`, { method: "GET" });
+  const toolName = String(req.params.toolName);
+  const cacheKey = `runtime:/v1/tools/${toolName}/docs`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    reply.code(cached.statusCode);
+    return cached.body;
+  }
+
+  const r = await request(`${env.RUNTIME_BASE_URL}/v1/tools/${encodeURIComponent(toolName)}/docs`, { method: "GET" });
   const data = await r.body.json();
   reply.code(r.statusCode);
+  if (r.statusCode === 200) setCached(cacheKey, r.statusCode, data, 5000);
   return data;
 });
 
