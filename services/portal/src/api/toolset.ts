@@ -43,6 +43,10 @@ export type ApiError = Error & {
   status?: number;
 };
 
+export type ErrorCatalogResponse = {
+  errors: Array<{ code: string; message: { zh: string; en: string } }>;
+};
+
 type FetchOptions = {
   method?: "GET" | "POST";
   bearerToken?: string;
@@ -122,4 +126,8 @@ export async function getDemoToken(baseUrl: string) {
     method: "POST",
     body: { client_id: "demo", client_secret: "demo" }
   });
+}
+
+export async function getErrorCatalog(baseUrl: string) {
+  return apiFetch<ErrorCatalogResponse>(baseUrl, "/v1/docs/errors");
 }

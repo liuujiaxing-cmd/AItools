@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AppShell from "@/components/AppShell";
 import Home from "@/pages/Home";
+import Docs from "@/pages/Docs";
 import Links from "@/pages/Links";
 import Playground from "@/pages/Playground";
 import ToolDetail from "@/pages/ToolDetail";
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/tools" element={<Tools />} />
           <Route path="/tools/:toolName" element={<ToolDetail />} />
           <Route path="/playground" element={<Playground />} />
+          <Route path="/docs" element={<Docs />} />
           <Route path="/links" element={<Links />} />
         </Route>
       </Routes>

@@ -1,14 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import {
-  Activity,
-  FileText,
-  LayoutGrid,
-  Play,
-  Settings,
-  Wrench
-} from "lucide-react";
+import { Activity, FileText, LayoutGrid, Play, Settings, Wrench } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import Badge from "@/components/Badge";
@@ -63,6 +56,7 @@ export default function AppShell() {
     const p = location.pathname;
     if (p.startsWith("/tools")) return "工具";
     if (p.startsWith("/playground")) return "在线调用";
+    if (p.startsWith("/docs")) return "文档";
     if (p.startsWith("/links")) return "文档与监控";
     return "系统概览";
   }, [location.pathname]);
@@ -116,7 +110,7 @@ export default function AppShell() {
             <NavItem to="/" icon={<LayoutGrid className="h-4 w-4" />} label="概览" />
             <NavItem to="/tools" icon={<Wrench className="h-4 w-4" />} label="工具" />
             <NavItem to="/playground" icon={<Play className="h-4 w-4" />} label="在线调用" />
-            <NavItem to="/links" icon={<FileText className="h-4 w-4" />} label="文档与监控" />
+            <NavItem to="/docs" icon={<FileText className="h-4 w-4" />} label="文档" />
           </div>
 
           <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">

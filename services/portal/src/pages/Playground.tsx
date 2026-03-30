@@ -189,7 +189,7 @@ export default function Playground() {
     const body = escapeForSingleQuotes(JSON.stringify(payload));
     const cmd = `curl -sS -X POST ${gatewayBaseUrl}/v1/tools/${encodeURIComponent(selectedTool)}:invoke \\\n+  -H 'content-type: application/json' \\\n+${auth}  -d '${body}'\n`;
 
-    await copyToClipboard(cmd);
+    await copyToClipboard(cmd.replace(/\n\+/g, "\n"));
     setNotice("已复制 cURL");
     window.setTimeout(() => setNotice(""), 1500);
   }
