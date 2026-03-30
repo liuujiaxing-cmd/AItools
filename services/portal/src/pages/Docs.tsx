@@ -257,7 +257,7 @@ print(r.json())
         {notice ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">{notice}</div> : null}
 
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-          这是一份“内置在门户里”的说明文档：面向用户与开发者，包含快速上手、一键调用示例、工具开发规范、部署与排障。
+          这是“文档中心”（门户内置页面，不是 Swagger）。如果你想看接口详情/在线试接口，请点右上角的 Swagger。
         </div>
 
         <Card>

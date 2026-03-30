@@ -56,7 +56,7 @@ export default function AppShell() {
     const p = location.pathname;
     if (p.startsWith("/tools")) return "工具";
     if (p.startsWith("/playground")) return "在线调用";
-    if (p.startsWith("/docs")) return "文档";
+    if (p.startsWith("/docs")) return "文档中心";
     if (p.startsWith("/links")) return "文档与监控";
     return "系统概览";
   }, [location.pathname]);
@@ -110,7 +110,7 @@ export default function AppShell() {
             <NavItem to="/" icon={<LayoutGrid className="h-4 w-4" />} label="概览" />
             <NavItem to="/tools" icon={<Wrench className="h-4 w-4" />} label="工具" />
             <NavItem to="/playground" icon={<Play className="h-4 w-4" />} label="在线调用" />
-            <NavItem to="/docs" icon={<FileText className="h-4 w-4" />} label="文档" />
+            <NavItem to="/docs" icon={<FileText className="h-4 w-4" />} label="文档中心" />
           </div>
 
           <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
@@ -195,6 +195,13 @@ export default function AppShell() {
               <h1 className="mt-1 text-lg font-semibold">{title}</h1>
             </div>
             <div className="hidden items-center gap-2 md:flex">
+              <NavLink
+                to="/docs"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+              >
+                <FileText className="h-4 w-4" />
+                文档中心
+              </NavLink>
               <a
                 href={`${gatewayBaseUrl}/docs`}
                 target="_blank"
@@ -202,7 +209,7 @@ export default function AppShell() {
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
               >
                 <FileText className="h-4 w-4" />
-                API Docs
+                Swagger
               </a>
               <a
                 href={`${gatewayBaseUrl}/metrics`}
